@@ -24,19 +24,25 @@
 
 #import "ALAlertBanner.h"
 
-#define AL_IOS_7_OR_GREATER [UIDevice iOSVersion] >= 7.0
+#define AL_IOS_7_OR_GREATER [UIDevice al_iOSVersion] >= 7.0
 
 static CGFloat const kStatusBarHeight = 20.f;
 
 @interface UIDevice (ALSystemVersion)
 
-+ (float)iOSVersion;
++ (CGFloat)al_iOSVersion;
 
 @end
 
 @interface UIApplication (ALNavigationBarHeight)
 
-+ (CGFloat)navigationBarHeight;
++ (CGFloat)al_navigationBarHeight;
+
+@end
+
+@interface UIView (ALTopPositionOffset)
+
+- (CGFloat)al_positionTopOffset;
 
 @end
 

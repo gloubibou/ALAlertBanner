@@ -69,19 +69,26 @@ static CFTimeInterval const kRotationDurationIPad = 0.4;
 //darkerColor referenced from http://stackoverflow.com/questions/11598043/get-slightly-lighter-and-darker-color-from-uicolor
 @implementation UIColor (LightAndDark)
 
-- (UIColor *)darkerColor {
-    float h, s, b, a;
+- (UIColor *)al_darkerColor {
+    CGFloat h, s, b, a;
     if ([self getHue:&h saturation:&s brightness:&b alpha:&a])
         return [UIColor colorWithHue:h saturation:s brightness:b * 0.75 alpha:a];
     return nil;
+}
+
+- (UIColor *)al_lighterColor {
+	CGFloat h, s, b, a;
+	if ([self getHue:&h saturation:&s brightness:&b alpha:&a])
+		return [UIColor colorWithHue:h saturation:s brightness:b * 1.15 alpha:a];
+	return nil;
 }
 
 @end
 
 @implementation UIDevice (ALSystemVersion)
 
-+ (float)iOSVersion {
-    static float version = 0.f;
++ (CGFloat)al_iOSVersion {
+    static CGFloat version = 0.f;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         version = [[[UIDevice currentDevice] systemVersion] floatValue];
@@ -93,12 +100,40 @@ static CFTimeInterval const kRotationDurationIPad = 0.4;
 
 @implementation UIApplication (ALNavigationBarHeight)
 
-+ (CGFloat)navigationBarHeight {
++ (CGFloat)al_navigationBarHeight {
     //if we're on iOS7 or later, return new landscape navBar height
-    if (AL_IOS_7_OR_GREATER && UIInterfaceOrientationIsLandscape([[UIApplication sharedApplication] statusBarOrientation]))
+    if (AL_IOS_7_OR_GREATER &&
+		(UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone) &&
+		UIInterfaceOrientationIsLandscape([[UIApplication sharedApplication] statusBarOrientation]))
         return kNavigationBarHeightiOS7Landscape;
     
     return kNavigationBarHeightDefault;
+}
+
+@end
+
+@implementation UIView (ALTopPositionOffset)
+
+- (CGFloat)al_positionTopOffset
+{
+	UIWindow *window = [self window];
+
+	if (window != nil) {
+		UIViewController *rootViewController = [window rootViewController];
+		UINavigationController *navigationController = [rootViewController navigationController];
+
+		if ((navigationController == nil) && [rootViewController isKindOfClass:[UINavigationController class]]) {
+			navigationController = (id)rootViewController;
+		}
+
+		UINavigationBar *navigationBar = [navigationController navigationBar];
+		CGRect navigationBarFrame = [navigationBar frame];
+
+		return CGRectGetMaxY(navigationBarFrame);
+	}
+	else {
+		return [UIApplication al_navigationBarHeight] + kStatusBarHeight;
+	}
 }
 
 @end
@@ -371,6 +406,11 @@ static CFTimeInterval const kRotationDurationIPad = 0.4;
         CGFloat yCoord = oldPoint.y;
         switch (self.position) {
             case ALAlertBannerPositionTop:
+				yCoord += self.frame.size.height;
+				if (AL_IOS_7_OR_GREATER) {
+					yCoord += [self al_positionTopOffset];
+				}
+                break;
             case ALAlertBannerPositionUnderNavBar:
                 yCoord += self.frame.size.height;
                 break;
@@ -490,7 +530,7 @@ static CFTimeInterval const kRotationDurationIPad = 0.4;
 # pragma mark -
 # pragma mark Private Methods
 
-- (void)animationDidStop:(CAAnimation *)anim finished:(BOOL)flag {    
+- (void)animationDidStop:(CAAnimation *)anim finished:(BOOL)flag {
     if ([[anim valueForKey:@"anim"] isEqualToString:kShowAlertBannerKey] && flag) {
         [self.delegate alertBannerDidShow:self inView:self.superview];
         self.state = ALAlertBannerStateVisible;
@@ -530,14 +570,12 @@ static CFTimeInterval const kRotationDurationIPad = 0.4;
         case ALAlertBannerPositionTop:
             initialYCoord = -heightForSelf;
             if (isSuperviewKindOfWindow) initialYCoord += kStatusBarHeight;
-            if (AL_IOS_7_OR_GREATER)
-                initialYCoord += [UIApplication navigationBarHeight] + kStatusBarHeight;
             break;
         case ALAlertBannerPositionBottom:
             initialYCoord = superview.bounds.size.height;
             break;
         case ALAlertBannerPositionUnderNavBar:
-            initialYCoord = -heightForSelf + [UIApplication navigationBarHeight] + kStatusBarHeight;
+            initialYCoord = -heightForSelf + [UIApplication al_navigationBarHeight] + kStatusBarHeight;
             break;
     }
     frame.origin.y = initialYCoord;
@@ -692,20 +730,31 @@ static CFTimeInterval const kRotationDurationIPad = 0.4;
             break;
     }
     
-    NSArray *colorsArray = [NSArray arrayWithObjects:(id)[fillColor CGColor], (id)[[fillColor darkerColor] CGColor], nil];
-    CGColorSpaceRef colorSpace =  CGColorSpaceCreateDeviceRGB();
-    const CGFloat locations[2] = {0.f, 1.f};
-    CGGradientRef gradient = CGGradientCreateWithColors(colorSpace, (__bridge CFArrayRef)colorsArray, locations);
-    
-    CGContextDrawLinearGradient(context, gradient, CGPointZero, CGPointMake(0.f, self.bounds.size.height), 0.f);
-    
-    CGGradientRelease(gradient);
-    CGColorSpaceRelease(colorSpace);
-    
-    CGContextSetFillColorWithColor(context, [UIColor colorWithRed:0.f green:0.f blue:0.f alpha:0.6f].CGColor);
-    CGContextFillRect(context, CGRectMake(0.f, rect.size.height - 1.f, rect.size.width, 1.f));
-    CGContextSetFillColorWithColor(context, [UIColor colorWithRed:1.f green:1.f blue:1.f alpha:0.3f].CGColor);
-    CGContextFillRect(context, CGRectMake(0.f, 0.f, rect.size.width, 1.f));
+	if (AL_IOS_7_OR_GREATER) {
+        // Fill with plain color in iOS 7 to fit its "flat" design
+        CGContextSetFillColorWithColor(context, [[fillColor al_lighterColor] CGColor]);
+        CGContextFillRect(context, self.bounds);
+    } else {
+		NSArray *colorsArray = [NSArray arrayWithObjects:(id)[fillColor CGColor], (id)[[fillColor al_darkerColor] CGColor], nil];
+		CGColorSpaceRef colorSpace =  CGColorSpaceCreateDeviceRGB();
+		const CGFloat locations[2] = {0.f, 1.f};
+		CGGradientRef gradient = CGGradientCreateWithColors(colorSpace, (__bridge CFArrayRef)colorsArray, locations);
+
+		CGContextDrawLinearGradient(context, gradient, CGPointZero, CGPointMake(0.f, self.bounds.size.height), 0.f);
+
+		CGGradientRelease(gradient);
+		CGColorSpaceRelease(colorSpace);
+    }
+
+	if (AL_IOS_7_OR_GREATER) {
+        CGContextSetFillColorWithColor(context, [UIColor colorWithRed:1 green:1 blue:1 alpha:0.3].CGColor);
+        CGContextFillRect(context, CGRectMake(0, rect.size.height - 1.f, rect.size.width, 1.f));
+    } else {
+		CGContextSetFillColorWithColor(context, [UIColor colorWithRed:0.f green:0.f blue:0.f alpha:0.6f].CGColor);
+		CGContextFillRect(context, CGRectMake(0.f, rect.size.height - 1.f, rect.size.width, 1.f));
+		CGContextSetFillColorWithColor(context, [UIColor colorWithRed:1.f green:1.f blue:1.f alpha:0.3f].CGColor);
+		CGContextFillRect(context, CGRectMake(0.f, 0.f, rect.size.width, 1.f));
+	}
 }
 
 - (NSString *)description {

@@ -170,8 +170,12 @@
     NSArray *bannersInSamePosition = [bannersArray filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"SELF.position == %i", alertBanner.position]];
     
     //set shadow before pushing other banners, because the banner push may be delayed by the fade in duration (which is set at the same time as the shadow) on iOS7
-    alertBanner.showShadow = (bannersInSamePosition.count > 1 ? NO : YES);
-    
+  	if (AL_IOS_7_OR_GREATER) {
+		alertBanner.showShadow = NO;
+	} else {
+		alertBanner.showShadow = (bannersInSamePosition.count > 1 ? NO : YES);
+    }
+
     for (ALAlertBanner *banner in bannersToPush) {
         if (banner.position == alertBanner.position) {
             [banner pushAlertBanner:alertBanner.frame.size.height forward:YES delay:alertBanner.fadeInDuration];
@@ -209,9 +213,14 @@
     else if (index == 0) {
         if (bannersInSamePosition.count > 1) {
             ALAlertBanner *nextAlertBanner = (ALAlertBanner *)[bannersInSamePosition objectAtIndex:1];
-            [nextAlertBanner setShowShadow:YES];
-        }
-        
+
+			if (AL_IOS_7_OR_GREATER) {
+				[nextAlertBanner setShowShadow:NO];
+			} else {
+				[nextAlertBanner setShowShadow:YES];
+			}
+		}
+
         [alertBanner setShowShadow:NO];
     }
 }
@@ -264,7 +273,7 @@
         NSArray *topBanners = [view.alertBanners filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"SELF.position == %i", ALAlertBannerPositionTop]];
         CGFloat topYCoord = 0.f;
         if (AL_IOS_7_OR_GREATER)
-            topYCoord += [UIApplication navigationBarHeight] + kStatusBarHeight;
+            topYCoord += [view al_positionTopOffset];
         for (ALAlertBanner *alertBanner in [topBanners reverseObjectEnumerator]) {
             [alertBanner updateSizeAndSubviewsAnimated:YES];
             [alertBanner updatePositionAfterRotationWithY:topYCoord animated:YES];
